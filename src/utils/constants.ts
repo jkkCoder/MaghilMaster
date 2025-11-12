@@ -1,0 +1,1 @@
+export const PermissionDeniedText = "You don't have permission to perform this action";

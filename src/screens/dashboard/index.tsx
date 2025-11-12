@@ -1,24 +1,22 @@
-import React from 'react';
-import { AppState, NativeEventEmitter, SafeAreaView, View, Text, FlatList } from 'react-native';
-import MqttBroker from './src/nativeModules/MqttBrokerModule';
-import database from './src/watermelondb-example/database';
+import { View, Text, AppState, NativeEventEmitter, SafeAreaView, FlatList } from 'react-native'
+import React from 'react'
+import Order from '../../watermelondb-example/models/order';
+import { useDispatch } from 'react-redux';
+import MqttBroker from '../../nativeModules/MqttBrokerModule';
+import { clearEmptyOrders, getAllOrderIds, saveOrderIdToDB } from '../../watermelondb-example/simplifiedWatermelonDBUtils';
+import database from '../../watermelondb-example/database';
 import { Q } from '@nozbe/watermelondb';
-import { saveOrderIdToDB, getAllOrderIds, clearEmptyOrders } from './src/watermelondb-example/simplifiedWatermelonDBUtils';
-import Order from './src/watermelondb-example/models/order';
-import { Provider, useDispatch } from 'react-redux';
-import { getPrinters } from './src/api/printer/printerActions';
-import { Store } from './src/api/configureStore';
-import Routes from './src/Navigator';
-
+import { getPrinters } from '../../api/printer/printerActions';
 
 const mqttEmitter = new NativeEventEmitter(MqttBroker);
 
-const AppContent = () => {
+const Dashboard = () => {
   const [watermelonOrders, setWatermelonOrders] = React.useState<Order[]>([]);
   const dispatch = useDispatch()
 
   // Track processed messages to prevent duplicates
   const processedMessages = React.useRef(new Set<string>()).current;
+
   // Handle AppState changes
   React.useEffect(() => {
     const handleAppStateChange = (nextAppState: string) => {
@@ -182,7 +180,6 @@ const AppContent = () => {
       await new Promise((resolve) => setTimeout(resolve, 100));
       dispatch(getPrinters({ locationId: 'd15139f6-ea2b-4b4c-8541-7a9112bfd8bf' , deviceIdentifier: 'merchant-de446aca7248f766-d15139f6-ea2b-4b4c-8541-7a9112bfd8bf', sagaResponseCB:async(printers:any) => {        
         //success callback
-        console.log("printers ", printers)
       }}));
     })()
     
@@ -292,14 +289,6 @@ const AppContent = () => {
       )}
     </SafeAreaView>
   );
-};
+}
 
-const App = () => {
-  return (
-    <Provider store={Store}>
-      <AppContent />
-    </Provider>
-  );
-};
-
-export default App;
+export default Dashboard
