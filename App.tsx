@@ -1,5 +1,5 @@
-import React from 'react';
-import { AppState, NativeEventEmitter, SafeAreaView, View, Text, FlatList } from 'react-native';
+import React, { useState } from 'react';
+import { AppState, NativeEventEmitter, SafeAreaView, View, Text, FlatList, StyleSheet, TouchableOpacity } from 'react-native';
 import MqttBroker from './src/nativeModules/MqttBrokerModule';
 import database from './src/watermelondb-example/database';
 import { Q } from '@nozbe/watermelondb';
@@ -9,6 +9,8 @@ import { Provider, useDispatch } from 'react-redux';
 import { getPrinters } from './src/api/printer/printerActions';
 import { Store } from './src/api/configureStore';
 import Routes from './src/Navigator';
+import OrderScreen from './src/screens/OrderScreen';
+import ProductScreen from './src/screens/ProductScreen';
 
 
 const mqttEmitter = new NativeEventEmitter(MqttBroker);
@@ -16,6 +18,8 @@ const mqttEmitter = new NativeEventEmitter(MqttBroker);
 const AppContent = () => {
   const [watermelonOrders, setWatermelonOrders] = React.useState<Order[]>([]);
   const dispatch = useDispatch()
+
+  const [activeTab, setActiveTab] = useState <'orders' | 'products'>('orders');
 
   // Track processed messages to prevent duplicates
   const processedMessages = React.useRef(new Set<string>()).current;
@@ -253,6 +257,27 @@ const AppContent = () => {
         Clear Empty Orders
       </Text>
 
+      <View style={styles.container}>
+      <View style={styles.tabBar}>
+        <TouchableOpacity
+          style={[styles.tab, activeTab === 'orders' && styles.activeTab]}
+          onPress={() => setActiveTab('orders')}>
+          <Text style={[styles.tabText, activeTab === 'orders' && styles.activeTabText]}>
+            📋 Orders
+          </Text>
+        </TouchableOpacity>
+        <TouchableOpacity
+          style={[styles.tab, activeTab === 'products' && styles.activeTab]}
+          onPress={() => setActiveTab('products')}>
+          <Text style={[styles.tabText, activeTab === 'products' && styles.activeTabText]}>
+            📦 Products
+          </Text>
+        </TouchableOpacity>
+      </View>
+      
+      {activeTab === 'orders' ? <OrderScreen /> : <ProductScreen />}
+    </View>
+
       {watermelonOrders?.length > 0 && (
         <View style={{ marginVertical: 10 ,flex:1,padding:10,borderRadius:8}}>
           <Text style={{ fontSize: 16, fontWeight: 'bold', marginBottom: 10, color: 'black' }}>
@@ -303,3 +328,36 @@ const App = () => {
 };
 
 export default App;
+
+
+
+const styles = StyleSheet.create({
+  container: {
+    flex: 1,
+    backgroundColor: '#fff',
+  },
+  tabBar: {
+    flexDirection: 'row',
+    backgroundColor: '#fff',
+    borderBottomWidth: 1,
+    borderBottomColor: '#e0e0e0',
+  },
+  tab: {
+    flex: 1,
+    paddingVertical: 15,
+    alignItems: 'center',
+    borderBottomWidth: 3,
+    borderBottomColor: 'transparent',
+  },
+  activeTab: {
+    borderBottomColor: '#2196F3',
+  },
+  tabText: {
+    fontSize: 16,
+    color: '#999',
+    fontWeight: '600',
+  },
+  activeTabText: {
+    color: '#2196F3',
+  },
+});
