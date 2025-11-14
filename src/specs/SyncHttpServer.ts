@@ -1,5 +1,4 @@
-import type { TurboModule } from 'react-native';
-import { TurboModuleRegistry } from 'react-native';
+import { NativeModules } from 'react-native';
 
 export interface ServerInfo {
   ip: string;
@@ -10,7 +9,7 @@ export interface ServerInfo {
   server: string;
 }
 
-export interface Spec extends TurboModule {
+export interface SyncHttpServerModule {
   startServer(port: number): Promise<ServerInfo>;
   stopServer(): Promise<string>;
   setSyncData(requestId: string, dataJson: string): void;
@@ -18,4 +17,4 @@ export interface Spec extends TurboModule {
   getServerInfo(): Promise<ServerInfo>;
 }
 
-export default TurboModuleRegistry.getEnforcing<Spec>('SyncHttpServer');
+export default NativeModules.SyncHttpServer as SyncHttpServerModule;

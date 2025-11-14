@@ -61,49 +61,50 @@ function announceServer() {
  * Setup event listeners for sync requests
  */
 function setupSyncListeners() {
-  // Handle HTTP pull requests from client devices
-  syncServerEmitter.addListener('sync_pull_request', async (data) => {
-    const { lastPulledAt, requestId } = data;
-    console.log('🔽 Pull request from client:', lastPulledAt);
+  // Handle HTTP sync requests from client devices (both pull and push)
+  syncServerEmitter.addListener('sync_request', async (data: any) => {
+    const { type, requestId, lastPulledAt, data: pushData } = data;
     
-    try {
-      const changes = await getChangesFromDB(parseInt(lastPulledAt || '0'));
-      const response = {
-        timestamp: Date.now(),
-        changes: changes
-      };
+    if (type === 'pull') {
+      // Handle HTTP pull requests from client devices
+      console.log('🔽 Pull request from client:', lastPulledAt);
       
-      // Send back to native module
-      await KtorSyncServer.setSyncData(requestId, JSON.stringify(response));
-      console.log('✅ Pull data prepared:', Object.keys(changes).length, 'tables');
-    } catch (error) {
-      console.error('❌ Pull error:', error);
-      await KtorSyncServer.setSyncData(requestId, JSON.stringify({
-        error: error.message,
-        timestamp: Date.now(),
-        changes: {}
-      }));
-    }
-  });
-  
-  // Handle HTTP push requests from client devices
-  syncServerEmitter.addListener('sync_push_received', async (data) => {
-    const { changes, requestId } = data;
-    console.log('🔼 Push received from client');
-    
-    try {
-      const changesObj = JSON.parse(changes);
-      await applyChangesToDB(changesObj);
+      try {
+        const changes = await getChangesFromDB(parseInt(lastPulledAt || '0'));
+        const response = {
+          timestamp: Date.now(),
+          changes: changes
+        };
+        
+        // Send back to native module
+        await KtorSyncServer.setSyncData(requestId, JSON.stringify(response));
+        console.log('✅ Pull data prepared:', Object.keys(changes).length, 'tables');
+      } catch (error: any) {
+        console.error('❌ Pull error:', error);
+        await KtorSyncServer.setSyncData(requestId, JSON.stringify({
+          error: error.message,
+          timestamp: Date.now(),
+          changes: {}
+        }));
+      }
+    } else if (type === 'push') {
+      // Handle HTTP push requests from client devices
+      console.log('🔼 Push received from client');
       
-      // Notify other clients via MQTT
-      MqttBroker.publish('sync/master/updated', JSON.stringify({
-        timestamp: Date.now(),
-        tables: Object.keys(changesObj)
-      }), 1);
-      
-      console.log('✅ Push applied & clients notified');
-    } catch (error) {
-      console.error('❌ Push error:', error);
+      try {
+        const changesObj = JSON.parse(pushData);
+        await applyChangesToDB(changesObj);
+        
+        // Notify other clients via MQTT
+        MqttBroker.publish('sync/master/updated', JSON.stringify({
+          timestamp: Date.now(),
+          tables: Object.keys(changesObj)
+        }), 1);
+        
+        console.log('✅ Push applied & clients notified');
+      } catch (error) {
+        console.error('❌ Push error:', error);
+      }
     }
   });
 }
