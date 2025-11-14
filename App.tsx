@@ -13,127 +13,128 @@ import OrderScreen from './src/screens/OrderScreen';
 import ProductScreen from './src/screens/ProductScreen';
 import { setupMasterSync } from './src/watermelondb-example/watermelon-sync';
 import { saveOrderToDB } from './src/utils/printerWatermelonDBUtils';
+import { applyRemoteChanges, getChangesSince } from './src/watermelondb-example/watermelonSyncHelpers';
 
 export const mock = {
-    "orderId": "9c20d582-5eed-4386-8adc-a49aead5f262",
-    "orderNo": "ORD-001",
-    "fullName": "John Doe",
-    "phone": "+1234567890",
-    "orderTypeId": "dine-in",
-    "orderTotal": 16.62,
-    "orderTime": "2025-10-07T05:45:00Z",
-    "discount": 0,
-    "discountType": "none",
-    "items": [
-      {
-        "id": "36c1440d-e171-46c6-b8ff-d439f053edb8",
-        "itemId": "01999f00-840a-7a9a-9ae7-85ea1b3518fe",
-        "customerId": null,
-        "cuisineId": null,
-        "categoryId": "ffb02757-7c75-46b1-b0aa-97dd32132ffa",
-        "categoryName": "Tea",
-        "subCategoryId": "d2f5bd1e-d61b-40ab-85d2-3cf906c0e41c",
-        "subCategoryName": "SGDSG",
-        "itemName": "Datacap 15.11",
-        "orderItemId": "36c1440d-e171-46c6-b8ff-d439f053edb8",
-        "itemAltName": "",
-        "quantity": "1",
-        "initialQuantity": "1",
-        "price": 15.11,
-        "subTotal": "15.11",
-        "comment": "",
-        "cancelReason": null,
-        "taxFees": "1.5110",
-        "classesPerMonth": null,
-        "startDate": null,
-        "endDate": null,
-        "durationOfClasses": null,
-        "totalClasses": null,
-        "isItemModified": null,
-        "masterKOT": true,
-        "stationKOT": false,
-        "orderId": "9c20d582-5eed-4386-8adc-a49aead5f262",
-        "options": [],
-        "isCompOff": null,
-        "isHold": null,
-        "sortOrder": 649,
-        "status": null,
-        "timeIn": null,
-        "isWeightBased": false,
-        "priceUnit": null,
-        "name": null,
-        "isCustomizationItem": null
-      }
-    ],
-    "totals": [
-      {
-        "id": "5cf391f2-4831-4ce9-b944-c433d78aeec9",
-        "code": "1.0",
-        "title": "Item Total",
-        "value": "15.11",
-        "sortOrder": "1"
-      },
-      {
-        "id": "9a0c2532-f22e-4438-8f12-0a7ee9db1803",
-        "code": "2.0",
-        "title": "Tax",
-        "value": "1.51",
-        "sortOrder": "2"
-      },
-      {
-        "id": "dcf07082-3869-4009-9b35-f2664af6e88e",
-        "code": "8.0",
-        "title": "Gratuity",
-        "value": "0.00",
-        "sortOrder": "3"
-      },
-      {
-        "id": "f9c527bd-0508-41d7-9607-3c6320bfa30d",
-        "code": "3.0",
-        "title": "Tip",
-        "value": "0.00",
-        "sortOrder": "6"
-      },
-      {
-        "id": "2fb5a381-e04d-45fc-9497-28e3bdf46c24",
-        "code": "6.0",
-        "title": "Discount",
-        "value": "0.00",
-        "sortOrder": "7"
-      },
-      {
-        "id": "522904f7-ee1d-4ae4-9cca-6d3cbf2b9ac7",
-        "code": "5.0",
-        "title": "Grand Total",
-        "value": "16.62",
-        "sortOrder": "9"
-      }
-    ],
-    "transactions": [
-      {
-        "id": "bff7b44c-85b9-4930-93c6-97df9551895b",
-        "locationId": "d15139f6-ea2b-4b4c-8541-7a9112bfd8bf",
-        "paymentProviderId": "OFFLINE_CASH_TRANSACTION",
-        "orderId": "9c20d582-5eed-4386-8adc-a49aead5f262",
-        "message": "Offline Payment is initiated",
-        "request": "{\"tokenExpired\":false,\"tipAmount\":0.0,\"discountAmount\":0.0}",
-        "response": null,
-        "statusCode": "25",
-        "authorizationCode": null,
-        "transactionAmount": 16.62,
-        "amountTendered": 16.62,
-        "tenderType": "POS",
-        "transactionType": null,
-        "cardName": null,
-        "cardType": null,
-        "cardLast4": null,
-        "cardInfo": null,
-        "createdTime": "10/07/2025 - 05:45AM",
-        "modifiedTime": "10/07/2025 - 10:45AM",
-        "sortedTime": null
-      }
-    ]
-  }
+  "orderId": "9c20d582-5eed-4386-8adc-a49aead5f262",
+  "orderNo": "ORD-001",
+  "fullName": "John Doe",
+  "phone": "+1234567890",
+  "orderTypeId": "dine-in",
+  "orderTotal": 16.62,
+  "orderTime": "2025-10-07T05:45:00Z",
+  "discount": 0,
+  "discountType": "none",
+  "items": [
+    {
+      "id": "36c1440d-e171-46c6-b8ff-d439f053edb8",
+      "itemId": "01999f00-840a-7a9a-9ae7-85ea1b3518fe",
+      "customerId": null,
+      "cuisineId": null,
+      "categoryId": "ffb02757-7c75-46b1-b0aa-97dd32132ffa",
+      "categoryName": "Tea",
+      "subCategoryId": "d2f5bd1e-d61b-40ab-85d2-3cf906c0e41c",
+      "subCategoryName": "SGDSG",
+      "itemName": "Datacap 15.11",
+      "orderItemId": "36c1440d-e171-46c6-b8ff-d439f053edb8",
+      "itemAltName": "",
+      "quantity": "1",
+      "initialQuantity": "1",
+      "price": 15.11,
+      "subTotal": "15.11",
+      "comment": "",
+      "cancelReason": null,
+      "taxFees": "1.5110",
+      "classesPerMonth": null,
+      "startDate": null,
+      "endDate": null,
+      "durationOfClasses": null,
+      "totalClasses": null,
+      "isItemModified": null,
+      "masterKOT": true,
+      "stationKOT": false,
+      "orderId": "9c20d582-5eed-4386-8adc-a49aead5f262",
+      "options": [],
+      "isCompOff": null,
+      "isHold": null,
+      "sortOrder": 649,
+      "status": null,
+      "timeIn": null,
+      "isWeightBased": false,
+      "priceUnit": null,
+      "name": null,
+      "isCustomizationItem": null
+    }
+  ],
+  "totals": [
+    {
+      "id": "5cf391f2-4831-4ce9-b944-c433d78aeec9",
+      "code": "1.0",
+      "title": "Item Total",
+      "value": "15.11",
+      "sortOrder": "1"
+    },
+    {
+      "id": "9a0c2532-f22e-4438-8f12-0a7ee9db1803",
+      "code": "2.0",
+      "title": "Tax",
+      "value": "1.51",
+      "sortOrder": "2"
+    },
+    {
+      "id": "dcf07082-3869-4009-9b35-f2664af6e88e",
+      "code": "8.0",
+      "title": "Gratuity",
+      "value": "0.00",
+      "sortOrder": "3"
+    },
+    {
+      "id": "f9c527bd-0508-41d7-9607-3c6320bfa30d",
+      "code": "3.0",
+      "title": "Tip",
+      "value": "0.00",
+      "sortOrder": "6"
+    },
+    {
+      "id": "2fb5a381-e04d-45fc-9497-28e3bdf46c24",
+      "code": "6.0",
+      "title": "Discount",
+      "value": "0.00",
+      "sortOrder": "7"
+    },
+    {
+      "id": "522904f7-ee1d-4ae4-9cca-6d3cbf2b9ac7",
+      "code": "5.0",
+      "title": "Grand Total",
+      "value": "16.62",
+      "sortOrder": "9"
+    }
+  ],
+  "transactions": [
+    {
+      "id": "bff7b44c-85b9-4930-93c6-97df9551895b",
+      "locationId": "d15139f6-ea2b-4b4c-8541-7a9112bfd8bf",
+      "paymentProviderId": "OFFLINE_CASH_TRANSACTION",
+      "orderId": "9c20d582-5eed-4386-8adc-a49aead5f262",
+      "message": "Offline Payment is initiated",
+      "request": "{\"tokenExpired\":false,\"tipAmount\":0.0,\"discountAmount\":0.0}",
+      "response": null,
+      "statusCode": "25",
+      "authorizationCode": null,
+      "transactionAmount": 16.62,
+      "amountTendered": 16.62,
+      "tenderType": "POS",
+      "transactionType": null,
+      "cardName": null,
+      "cardType": null,
+      "cardLast4": null,
+      "cardInfo": null,
+      "createdTime": "10/07/2025 - 05:45AM",
+      "modifiedTime": "10/07/2025 - 10:45AM",
+      "sortedTime": null
+    }
+  ]
+}
 
 
 const mqttEmitter = new NativeEventEmitter(MqttBroker);
@@ -142,7 +143,7 @@ const AppContent = () => {
   const [watermelonOrders, setWatermelonOrders] = React.useState<Order[]>([]);
   const dispatch = useDispatch()
 
-  const [activeTab, setActiveTab] = useState <'orders' | 'products'>('orders');
+  const [activeTab, setActiveTab] = useState<'orders' | 'products'>('orders');
 
   // Track processed messages to prevent duplicates
   const processedMessages = React.useRef(new Set<string>()).current;
@@ -184,7 +185,7 @@ const AppContent = () => {
       setupMasterSync(database);
       MqttBroker.subscribe('test/topic');
       MqttBroker.subscribe('sync/request');
-      
+
     })();
 
     return () => console.log('🔄 App cleanup - MQTT continues in background');
@@ -241,12 +242,39 @@ const AppContent = () => {
         } catch (err) {
           console.error('❌ Error handling sync request:', err);
         }
+      } else if (topic.startsWith('sync/pull/')) {
+        const [, , clientId] = topic.split('/');
+        const { lastPulledAt, syncId } = JSON.parse(msg.toString());
+
+        console.log(`🔽 PULL request from client ${clientId}`);
+
+        const result = await getChangesSince(database, lastPulledAt);
+
+        // Reply directly to client
+        MqttBroker.publish(
+          `sync/pull/response/${clientId}/${syncId}`,
+          JSON.stringify(result)
+        );
+      } else if (topic.startsWith('sync/push/')) {
+        const [, , clientId] = topic.split('/');
+        const { changes, lastPulledAt } = JSON.parse(msg.toString());
+
+        console.log(`🔼 PUSH from client ${clientId}`);
+
+        await applyRemoteChanges(database, { changes, lastPulledAt });
+
+        // Optionally broadcast to other clients
+        MqttBroker.publish(
+          'sync/broadcast',
+          JSON.stringify({ origin: clientId, changes })
+        );
       }
     };
 
     const messageListener = mqttEmitter.addListener('mqtt_message', async (data) => {
       const [topic, msg] = data.split('|');
 
+      console.log("topic, msg", topic, " ", msg);
       if (!msg.startsWith('chunk:')) {
         await handleFullMessage(topic, msg);
         return;
@@ -289,7 +317,7 @@ const AppContent = () => {
       console.warn('⚠️ MQTT connection lost, reconnecting...');
       try {
         await MqttBroker.startBroker();
-              setupMasterSync(database)
+        setupMasterSync(database)
         MqttBroker.subscribe('test/topic');
         MqttBroker.subscribe('sync/request');
         console.log('✅ MQTT reconnected');
@@ -309,13 +337,15 @@ const AppContent = () => {
   React.useEffect(() => {
     (async () => {
       await new Promise((resolve) => setTimeout(resolve, 100));
-      dispatch(getPrinters({ locationId: 'd15139f6-ea2b-4b4c-8541-7a9112bfd8bf' , deviceIdentifier: 'merchant-de446aca7248f766-d15139f6-ea2b-4b4c-8541-7a9112bfd8bf', sagaResponseCB:async(printers:any) => {        
-        //success callback
-        console.log("printers ", printers)
-      }}));
+      dispatch(getPrinters({
+        locationId: 'd15139f6-ea2b-4b4c-8541-7a9112bfd8bf', deviceIdentifier: 'merchant-de446aca7248f766-d15139f6-ea2b-4b4c-8541-7a9112bfd8bf', sagaResponseCB: async (printers: any) => {
+          //success callback
+          console.log("printers ", printers)
+        }
+      }));
     })()
-    
-  },[])
+
+  }, [])
 
   // Fetch WatermelonDB orders
   const getWatermelonOrders = async () => {
@@ -339,23 +369,23 @@ const AppContent = () => {
     }
   };
 
-  const trigger = async() => {
+  const trigger = async () => {
     console.log("creating an order...");
 
     const uniqueOrderId = `mock-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
     const paddedOrderNo = Math.random().toString().padStart(3, '0');
-            
+
     // Create a copy of mock with unique IDs
     const uniqueMock = {
-        ...mock,
-        orderId: uniqueOrderId,
-        orderNo: `ORD-${paddedOrderNo}`,
-        items: [],
-        totals: [],
-        transactions: [],
-        transactionsWithTip: []
+      ...mock,
+      orderId: uniqueOrderId,
+      orderNo: `ORD-${paddedOrderNo}`,
+      items: [],
+      totals: [],
+      transactions: [],
+      transactionsWithTip: []
     };
-    
+
     const stringified = JSON.stringify(uniqueMock);
     saveOrderToDB(JSON.parse(stringified));
   }
@@ -400,7 +430,7 @@ const AppContent = () => {
         Fetch Orders from WatermelonDB
       </Text>
 
-      <View style={{flexDirection:'row', gap: 20}}>
+      <View style={{ flexDirection: 'row', gap: 20 }}>
         <Text onPress={clearEmptyOrdersFromDB} style={{ marginTop: 10, fontSize: 16, color: 'red' }}>
           Clear Empty Orders
         </Text>
@@ -411,28 +441,28 @@ const AppContent = () => {
       </View>
 
       <View style={styles.container}>
-      <View style={styles.tabBar}>
-        <TouchableOpacity
-          style={[styles.tab, activeTab === 'orders' && styles.activeTab]}
-          onPress={() => setActiveTab('orders')}>
-          <Text style={[styles.tabText, activeTab === 'orders' && styles.activeTabText]}>
-            📋 Orders
-          </Text>
-        </TouchableOpacity>
-        <TouchableOpacity
-          style={[styles.tab, activeTab === 'products' && styles.activeTab]}
-          onPress={() => setActiveTab('products')}>
-          <Text style={[styles.tabText, activeTab === 'products' && styles.activeTabText]}>
-            📦 Products
-          </Text>
-        </TouchableOpacity>
+        <View style={styles.tabBar}>
+          <TouchableOpacity
+            style={[styles.tab, activeTab === 'orders' && styles.activeTab]}
+            onPress={() => setActiveTab('orders')}>
+            <Text style={[styles.tabText, activeTab === 'orders' && styles.activeTabText]}>
+              📋 Orders
+            </Text>
+          </TouchableOpacity>
+          <TouchableOpacity
+            style={[styles.tab, activeTab === 'products' && styles.activeTab]}
+            onPress={() => setActiveTab('products')}>
+            <Text style={[styles.tabText, activeTab === 'products' && styles.activeTabText]}>
+              📦 Products
+            </Text>
+          </TouchableOpacity>
+        </View>
+
+        {activeTab === 'orders' ? <OrderScreen /> : <ProductScreen />}
       </View>
-      
-      {activeTab === 'orders' ? <OrderScreen /> : <ProductScreen />}
-    </View>
 
       {watermelonOrders?.length > 0 && (
-        <View style={{ marginVertical: 10 ,flex:1,padding:10,borderRadius:8}}>
+        <View style={{ marginVertical: 10, flex: 1, padding: 10, borderRadius: 8 }}>
           <Text style={{ fontSize: 16, fontWeight: 'bold', marginBottom: 10, color: 'black' }}>
             Orders from WatermelonDB:{watermelonOrders.length}
           </Text>
@@ -443,7 +473,7 @@ const AppContent = () => {
             renderItem={({ item, index }) => (
               <View key={index}
                 style={{
-                  flex:1,
+                  flex: 1,
                   backgroundColor: '#f0f0f0',
                   padding: 10,
                   marginVertical: 5,
