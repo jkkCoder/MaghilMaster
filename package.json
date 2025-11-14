@@ -15,6 +15,14 @@
     "release": "cd android && gradlew clean && gradlew app:assembleRelease && cd..",
     "releasei": "cd android && ./gradlew clean && ./gradlew app:assembleRelease && cd .."
   },
+  "codegenConfig": {
+     "name": "SyncHttpServer",
+     "type": "modules",
+     "jsSrcsDir": "src/specs",
+     "android": {
+       "javaPackageName": "com.maghilmaster.synchttpserver"
+     }
+   },
   "dependencies": {
     "@nozbe/watermelondb": "^0.28.0",
     "@redux-devtools/extension": "^3.3.0",

@@ -13,6 +13,7 @@ import OrderScreen from './src/screens/OrderScreen';
 import ProductScreen from './src/screens/ProductScreen';
 import { setupMasterSync } from './src/watermelondb-example/watermelon-sync';
 import { saveOrderToDB } from './src/utils/printerWatermelonDBUtils';
+import { startMasterSync } from './src/sync/MasterSyncManager';
 import { applyRemoteChanges, getChangesSince } from './src/watermelondb-example/watermelonSyncHelpers';
 
 export const mock = {
@@ -136,7 +137,6 @@ export const mock = {
   ]
 }
 
-
 const mqttEmitter = new NativeEventEmitter(MqttBroker);
 
 const AppContent = () => {
@@ -173,22 +173,37 @@ const AppContent = () => {
     return () => subscription.remove();
   }, []);
 
-  // Initialize MQTT background service
+  // Initialize Master Sync System (MQTT + HTTP Server)
   React.useEffect(() => {
     (async () => {
-      console.log('🚀 Starting background MQTT service...');
+      console.log('🚀 Initializing Master Device...');
+
+      // Start MQTT background service
       MqttBroker.startBackgroundService();
       await new Promise(resolve => setTimeout(resolve, 1000));
 
       console.log('🖥️ Starting MQTT broker...');
-      await MqttBroker.startBroker();
-      setupMasterSync(database);
-      MqttBroker.subscribe('test/topic');
-      MqttBroker.subscribe('sync/request');
+//       await MqttBroker.startBroker();
+//       setupMasterSync(database);
+//       MqttBroker.subscribe('test/topic');
+//       MqttBroker.subscribe('sync/request');
 
+      // Start hybrid sync system (MQTT + HTTP)
+      try {
+        const serverInfo = await startMasterSync();
+        console.log('✅ Master device ready!');
+        console.log('   MQTT Broker: tcp://127.0.0.1:1883');
+        console.log('   HTTP Server:', serverInfo.url);
+        setupMasterSync(database);
+        // Still subscribe to test/topic for legacy MQTT orders
+        MqttBroker.subscribe('test/topic');
+        MqttBroker.subscribe('sync/request');
+      } catch (error) {
+        console.error('❌ Master initialization failed:', error);
+      }
     })();
 
-    return () => console.log('🔄 App cleanup - MQTT continues in background');
+    return () => console.log('🔄 App cleanup - services continue in background');
   }, []);
 
   // MQTT message handling with chunk support

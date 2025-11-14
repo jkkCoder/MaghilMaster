@@ -128,6 +128,12 @@ dependencies {
     implementation("com.facebook.react:react-android")
     implementation "io.moquette:moquette-broker:0.15"
     implementation 'org.eclipse.paho:org.eclipse.paho.client.mqttv3:1.2.5'
+    
+    // NanoHTTPD for HTTP server
+    implementation "org.nanohttpd:nanohttpd:2.3.1"
+    implementation "com.google.code.gson:gson:2.10.1"
+
+    
     if (hermesEnabled.toBoolean()) {
         implementation("com.facebook.react:hermes-android")
     } else {
