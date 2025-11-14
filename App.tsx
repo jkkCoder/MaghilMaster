@@ -13,6 +13,7 @@ import OrderScreen from './src/screens/OrderScreen';
 import ProductScreen from './src/screens/ProductScreen';
 import { setupMasterSync } from './src/watermelondb-example/watermelon-sync';
 import { saveOrderToDB } from './src/utils/printerWatermelonDBUtils';
+import { startMasterSync } from './src/sync/MasterSyncManager';
 
 export const mock = {
     "orderId": "9c20d582-5eed-4386-8adc-a49aead5f262",
@@ -135,7 +136,6 @@ export const mock = {
     ]
   }
 
-
 const mqttEmitter = new NativeEventEmitter(MqttBroker);
 
 const AppContent = () => {
@@ -172,22 +172,37 @@ const AppContent = () => {
     return () => subscription.remove();
   }, []);
 
-  // Initialize MQTT background service
+  // Initialize Master Sync System (MQTT + HTTP Server)
   React.useEffect(() => {
     (async () => {
-      console.log('🚀 Starting background MQTT service...');
+      console.log('🚀 Initializing Master Device...');
+
+      // Start MQTT background service
       MqttBroker.startBackgroundService();
       await new Promise(resolve => setTimeout(resolve, 1000));
 
       console.log('🖥️ Starting MQTT broker...');
-      await MqttBroker.startBroker();
-      setupMasterSync(database);
-      MqttBroker.subscribe('test/topic');
-      MqttBroker.subscribe('sync/request');
+//       await MqttBroker.startBroker();
+//       setupMasterSync(database);
+//       MqttBroker.subscribe('test/topic');
+//       MqttBroker.subscribe('sync/request');
       
+      // Start hybrid sync system (MQTT + HTTP)
+      try {
+        const serverInfo = await startMasterSync();
+        console.log('✅ Master device ready!');
+        console.log('   MQTT Broker: tcp://127.0.0.1:1883');
+        console.log('   HTTP Server:', serverInfo.url);
+
+        // Still subscribe to test/topic for legacy MQTT orders
+        MqttBroker.subscribe('test/topic');
+        MqttBroker.subscribe('sync/request');
+      } catch (error) {
+        console.error('❌ Master initialization failed:', error);
+      }
     })();
 
-    return () => console.log('🔄 App cleanup - MQTT continues in background');
+    return () => console.log('🔄 App cleanup - services continue in background');
   }, []);
 
   // MQTT message handling with chunk support
@@ -344,7 +359,7 @@ const AppContent = () => {
 
     const uniqueOrderId = `mock-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
     const paddedOrderNo = Math.random().toString().padStart(3, '0');
-            
+
     // Create a copy of mock with unique IDs
     const uniqueMock = {
         ...mock,
@@ -355,7 +370,7 @@ const AppContent = () => {
         transactions: [],
         transactionsWithTip: []
     };
-    
+
     const stringified = JSON.stringify(uniqueMock);
     saveOrderToDB(JSON.parse(stringified));
   }
