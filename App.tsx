@@ -12,8 +12,6 @@ import { startMasterSync } from './src/sync/MasterSyncManager';
 import { insertOrderFromJSON } from './src/utils/orderUtils';
 import { database } from './src/Storage/database';
 import { applyRemoteChanges, getChangesSince } from './src/utils/watermelon-helper';
-import Order from './src/models/Order';
-
 export const mock = {
   "orderId": "9c20d582-5eed-4386-8adc-a49aead5f262",
   "orderNo": "ORD-001",
@@ -137,48 +135,120 @@ export const mock = {
 
 const mqttEmitter = new NativeEventEmitter(MqttBroker);
 
+type DisplayOrder = {
+  orderId?: string;
+  orderNo?: string;
+  orderTotal?: number;
+  fullName?: string;
+  phone?: string;
+  createdAt?: string;
+};
+
 const AppContent = () => {
-  const [watermelonOrders, setWatermelonOrders] = React.useState<Order[]>([]);
+  const [watermelonOrders, setWatermelonOrders] = React.useState<DisplayOrder[]>([]);
   const dispatch = useDispatch()
 
   const [activeTab, setActiveTab] = useState<'orders' | 'products'>('orders');
+  const [deviceIp, setDeviceIp] = React.useState('resolving...');
+  const [serverLogs, setServerLogs] = React.useState<string[]>([]);
+  const connectedClientsRef = React.useRef<Set<string>>(new Set());
+  const [connectedClientCount, setConnectedClientCount] = React.useState(0);
+
+  const pushServerLog = React.useCallback((message: string) => {
+    setServerLogs((prev) => {
+      const entry = `${new Date().toLocaleTimeString()} • ${message}`;
+      const next = [entry, ...prev];
+      return next.slice(0, 100);
+    });
+  }, []);
+
+  const trackConnectedClient = React.useCallback(
+    (clientId: string | undefined) => {
+      if (!clientId) return;
+      if (connectedClientsRef.current.has(clientId)) return;
+      connectedClientsRef.current.add(clientId);
+      setConnectedClientCount(connectedClientsRef.current.size);
+      pushServerLog(`New client observed: ${clientId} (total ${connectedClientsRef.current.size})`);
+    },
+    [pushServerLog]
+  );
 
   // Track processed messages to prevent duplicates
   const processedMessages = React.useRef(new Set<string>()).current;
+
+  React.useEffect(() => {
+    let isMounted = true;
+    (async () => {
+      try {
+        if (typeof MqttBroker?.getLocalIpAddress !== 'function') {
+          throw new Error('Local IP lookup not supported on this platform');
+        }
+        const ip = await MqttBroker.getLocalIpAddress();
+        if (!isMounted) return;
+        setDeviceIp(ip ?? 'unknown');
+        pushServerLog(`Device LAN IP resolved: ${ip ?? 'unknown'}`);
+      } catch (error: any) {
+        if (!isMounted) return;
+        setDeviceIp('unavailable');
+        pushServerLog(`Failed to resolve device LAN IP: ${error?.message ?? error}`);
+      }
+    })();
+
+    return () => {
+      isMounted = false;
+    };
+  }, [pushServerLog]);
   // Handle AppState changes
   React.useEffect(() => {
     const handleAppStateChange = (nextAppState: string) => {
       console.log('📱 App state changed to:', nextAppState);
+      pushServerLog(`App state changed to ${nextAppState}`);
 
       if (nextAppState === 'background' || nextAppState === 'inactive') {
         console.log('🔄 App going to background - MQTT service continues running');
+        pushServerLog('App moved to background, MQTT should continue running');
       } else if (nextAppState === 'active') {
         console.log('🔄 App coming to foreground - checking MQTT service status');
+        pushServerLog('App came to foreground, verifying MQTT service');
         MqttBroker.isBackgroundServiceRunning()
           .then((isRunning: boolean) => {
             if (!isRunning) {
               console.log('⚠️ MQTT service not running, restarting...');
+              pushServerLog('MQTT background service not running – restarting');
               MqttBroker.startBackgroundService();
             } else {
               console.log('✅ MQTT service is running');
+              pushServerLog('MQTT background service is running');
             }
           })
-          .catch((error: any) => console.error('❌ Error checking MQTT service:', error));
+          .catch((error: any) => {
+            console.error('❌ Error checking MQTT service:', error);
+            pushServerLog(`Error checking MQTT service: ${error?.message ?? error}`);
+          });
       }
     };
 
     const subscription = AppState.addEventListener('change', handleAppStateChange);
     return () => subscription.remove();
-  }, []);
+  }, [pushServerLog]);
 
   // Initialize Master Sync System (MQTT + HTTP Server)
   React.useEffect(() => {
+    let isMounted = true;
     (async () => {
       console.log('🚀 Initializing Master Device...');
+      pushServerLog('Initializing master device…');
 
-      // Start MQTT background service
-      MqttBroker.startBackgroundService();
-      await new Promise(resolve => setTimeout(resolve, 1000));
+      try {
+        pushServerLog('Starting MQTT background service…');
+        await MqttBroker.startBackgroundService();
+        pushServerLog('MQTT background service started');
+      } catch (error: any) {
+        console.error('❌ Failed to start MQTT background service:', error);
+        pushServerLog(`MQTT background service failed: ${error?.message ?? error}`);
+      }
+
+      await new Promise<void>((resolve) => setTimeout(() => resolve(), 1000));
 
       console.log('🖥️ Starting MQTT broker...');
 //       await MqttBroker.startBroker();
@@ -187,27 +257,38 @@ const AppContent = () => {
 //       MqttBroker.subscribe('sync/request');
 
       // Start hybrid sync system (MQTT + HTTP)
+      pushServerLog('Bootstrapping hybrid sync system…');
       try {
         const serverInfo = await startMasterSync();
+        if (!isMounted) return;
         console.log('✅ Master device ready!');
         console.log('   MQTT Broker: tcp://127.0.0.1:1883');
         console.log('   HTTP Server:', serverInfo.url);
+        pushServerLog('Master device ready');
+        pushServerLog('MQTT Broker: tcp://127.0.0.1:1883');
+        pushServerLog(`HTTP Server: ${serverInfo.url}`);
         // MqttBroker.subscribe('sync/pull/+');
         // MqttBroker.subscribe('sync/push/+');
         MqttBroker.subscribe('offline_events');
-      } catch (error) {
+        pushServerLog('Subscribed to offline_events');
+      } catch (error: any) {
         console.error('❌ Master initialization failed:', error);
+        pushServerLog(`Master initialization failed: ${error?.message ?? error}`);
       }
     })();
 
-    return () => console.log('🔄 App cleanup - services continue in background');
-  }, []);
+    return () => {
+      isMounted = false;
+      console.log('🔄 App cleanup - services continue in background');
+      pushServerLog('App cleanup triggered – services continue in background');
+    };
+  }, [pushServerLog]);
 
   // MQTT message handling with chunk support
   React.useEffect(() => {
     const chunkBuffer: Record<
       string,
-      { chunks: string[]; total: number; timeoutId: NodeJs.Timeout }
+      { chunks: string[]; total: number; timeoutId: ReturnType<typeof setTimeout> }
     > = {};
 
     const MAX_PROCESSED_MESSAGES = 1000;
@@ -217,10 +298,12 @@ const AppContent = () => {
 
     const handleFullMessage = async (topic: string, msg: any) => {
       console.log("topic, msg", topic, " ", msg);
-      const parsedJson = JSON.parse(msg);
+      const parsedJson = typeof msg === 'string' ? JSON.parse(msg) : msg;
       const actualTopic = parsedJson.topic;
       const actualMessage = parsedJson.message;
       const fromDeviceId = parsedJson.fromDeviceId;
+      pushServerLog(`MQTT message received on ${actualTopic || topic}`);
+      if (fromDeviceId) trackConnectedClient(fromDeviceId);
 
       cleanProcessedMessages();
       if (actualTopic === 'order/data') {
@@ -230,13 +313,16 @@ const AppContent = () => {
 
           if (processedMessages.has(messageId)) {
             console.log(`🚫 Duplicate message skipped: ${orderData.orderId}`);
+            pushServerLog(`Duplicate order skipped: ${orderData.orderId}`);
             return;
           }
 
           processedMessages.add(messageId);
           console.log('🔄 Processing order:', orderData.orderId);
+          pushServerLog(`Processing order ${orderData.orderId}`);
           await insertOrderFromJSON(orderData);
           console.log('✅ Order saved:', orderData.orderId);
+          pushServerLog(`Order saved ${orderData.orderId}`);
 
           // // Verify
           // const foundOrders = await database
@@ -250,21 +336,26 @@ const AppContent = () => {
           setTimeout(() => processedMessages.delete(messageId), 60 * 1000);
         } catch (err) {
           console.error('❌ Error processing MQTT message:', err);
+          pushServerLog(`Error processing order message: ${err instanceof Error ? err.message : err}`);
         }
       } else if (actualTopic === 'sync/request') {
         try {
           console.log('🔁 Sync request received');
+          pushServerLog('Sync request received');
           // const orderIds = await getAllOrderIds();
           // const safeOrders = orderIds.map(id => ({ orderId: id }));
           // await sendSyncData(safeOrders);
         } catch (err) {
           console.error('❌ Error handling sync request:', err);
+          pushServerLog(`Error handling sync request: ${err instanceof Error ? err.message : err}`);
         }
       } else if (actualTopic.startsWith('sync/pull/')) {
-        const [, , clientId] = topic.split('/');
+        const [, , clientId] = actualTopic.split('/');
         const { lastPulledAt, syncId } = JSON.parse(actualMessage.toString());
 
         console.log(`🔽 PULL request from client ${clientId}`);
+        pushServerLog(`Pull request from client ${clientId || 'unknown'}`);
+        trackConnectedClient(clientId);
 
         const result = await getChangesSince(database, lastPulledAt);
 
@@ -273,19 +364,24 @@ const AppContent = () => {
           `sync/pull/response/${clientId}/${syncId}`,
           JSON.stringify(result)
         );
+        pushServerLog(`Sent pull response to ${clientId || 'unknown'}`);
       } else if (actualTopic.startsWith('sync/push/')) {
-        const [, , clientId] = topic.split('/');
+        const [, , clientId] = actualTopic.split('/');
         const { changes, lastPulledAt } = JSON.parse(actualMessage.toString());
 
         console.log(`🔼 PUSH from client ${clientId}`);
+        pushServerLog(`Push received from client ${clientId || 'unknown'}`);
+        trackConnectedClient(clientId);
 
         await applyRemoteChanges(database, { changes, lastPulledAt });
+        pushServerLog(`Applied remote changes from ${clientId || 'unknown'}`);
 
         // Optionally broadcast to other clients
         MqttBroker.publish(
           'sync/broadcast',
           JSON.stringify({ origin: clientId, changes })
         );
+        pushServerLog(`Broadcasted push changes from ${clientId || 'unknown'}`);
       }
     };
 
@@ -320,27 +416,31 @@ const AppContent = () => {
         clearTimeout(chunkBuffer[topic].timeoutId);
         delete chunkBuffer[topic];
         try {
-          await handleFullMessage(topic, JSON.parse(combined));
+          await handleFullMessage(topic, combined);
         } catch (err) {
           console.error('❌ Error parsing reconstructed message', err);
         }
       }
     });
 
-    const subListener = mqttEmitter.addListener('mqtt_subscribed', (topic) =>
+    const subListener = mqttEmitter.addListener('mqtt_subscribed', (topic) => {
       console.log(`✅ Subscribed to: ${topic}`)
-    );
+      pushServerLog(`Subscribed to topic ${topic}`);
+    });
 
     const connLostListener = mqttEmitter.addListener('mqtt_connection_lost', async () => {
       console.warn('⚠️ MQTT connection lost, reconnecting...');
+      pushServerLog('MQTT connection lost – attempting restart');
       try {
         await MqttBroker.startBroker();
         // MqttBroker.subscribe('sync/pull/+');
         // MqttBroker.subscribe('sync/push/+');
         MqttBroker.subscribe('offline_events');
         console.log('✅ MQTT reconnected');
+        pushServerLog('MQTT broker restarted and resubscribed');
       } catch (err) {
         console.error('❌ Failed to reconnect MQTT:', err);
+        pushServerLog(`Failed to reconnect MQTT: ${err instanceof Error ? err.message : err}`);
       }
     });
 
@@ -350,17 +450,17 @@ const AppContent = () => {
       connLostListener.remove();
       Object.values(chunkBuffer).forEach(({ timeoutId }) => clearTimeout(timeoutId));
     };
-  }, []);
+  }, [pushServerLog, trackConnectedClient]);
 
   React.useEffect(() => {
     (async () => {
-      await new Promise((resolve) => setTimeout(resolve, 100));
-      dispatch(getPrinters({
-        locationId: 'd15139f6-ea2b-4b4c-8541-7a9112bfd8bf', deviceIdentifier: 'merchant-de446aca7248f766-d15139f6-ea2b-4b4c-8541-7a9112bfd8bf', sagaResponseCB: async (printers: any) => {
-          //success callback
-          console.log("printers ", printers)
-        }
-      }));
+      await new Promise<void>((resolve) => setTimeout(() => resolve(), 100));
+      // dispatch(getPrinters({
+      //   locationId: 'd15139f6-ea2b-4b4c-8541-7a9112bfd8bf', deviceIdentifier: 'merchant-de446aca7248f766-d15139f6-ea2b-4b4c-8541-7a9112bfd8bf', sagaResponseCB: async (printers: any) => {
+      //     //success callback
+      //     console.log("printers ", printers)
+      //   }
+      // }));
     })()
 
   }, [])
@@ -406,7 +506,7 @@ const AppContent = () => {
           };
           MqttBroker.publish('sync/data', JSON.stringify(batchPayload), 0);
           console.log(`📦 Sent batch ${Math.floor(i / batchSize) + 1}/${totalBatches}`);
-          await new Promise((resolve) => setTimeout(resolve, 100));
+          await new Promise<void>((resolve) => setTimeout(() => resolve(), 100));
         }
 
         console.log('✅ All batches sent successfully');
@@ -425,6 +525,14 @@ const AppContent = () => {
       <Text onPress={() => {}} style={{ marginTop: 20, fontSize: 16, color: 'black' }}>
         Fetch Orders from WatermelonDB
       </Text>
+      <View style={styles.statusCard}>
+        <Text style={styles.statusHeading}>Runtime Status</Text>
+        <Text style={styles.statusText}>Device IP: {deviceIp}</Text>
+        <Text style={styles.statusText}>Observed devices: {connectedClientCount}</Text>
+        <Text style={styles.statusText}>
+          Last event: {serverLogs[0] ?? 'Waiting for MQTT events…'}
+        </Text>
+      </View>
 
       <View style={{ flexDirection: 'row', gap: 20 }}>
         <Text onPress={() => {}} style={{ marginTop: 10, fontSize: 16, color: 'red' }}>
@@ -436,7 +544,19 @@ const AppContent = () => {
         </Text>
       </View>
 
-      <View style={styles.container}>
+      <View style={styles.logContainer}>
+        <Text style={styles.logTitle}>Server Logs</Text>
+        <FlatList
+          data={serverLogs}
+          keyExtractor={(_, index) => `server-log-${index}`}
+          renderItem={({ item }) => <Text style={styles.logItem}>{item}</Text>}
+          ListEmptyComponent={
+            <Text style={styles.logItem}>No server logs yet. Waiting for events…</Text>
+          }
+        />
+      </View>
+
+      {/* <View style={styles.container}>
         <View style={styles.tabBar}>
           <TouchableOpacity
             style={[styles.tab, activeTab === 'orders' && styles.activeTab]}
@@ -455,7 +575,7 @@ const AppContent = () => {
         </View>
 
         {activeTab === 'orders' ? <OrderScreen /> : <ProductScreen />}
-      </View>
+      </View> */}
 
       {watermelonOrders?.length > 0 && (
         <View style={{ marginVertical: 10, flex: 1, padding: 10, borderRadius: 8 }}>
@@ -514,6 +634,45 @@ const styles = StyleSheet.create({
   container: {
     flex: 1,
     backgroundColor: '#fff',
+  },
+  statusCard: {
+    marginTop: 16,
+    padding: 12,
+    borderRadius: 8,
+    backgroundColor: '#f7f9fc',
+    borderWidth: 1,
+    borderColor: '#e0e6ee',
+  },
+  statusHeading: {
+    fontSize: 16,
+    fontWeight: '700',
+    color: '#111',
+    marginBottom: 6,
+  },
+  statusText: {
+    fontSize: 13,
+    color: '#333',
+    marginTop: 4,
+  },
+  logContainer: {
+    marginTop: 16,
+    padding: 12,
+    borderRadius: 8,
+    backgroundColor: '#fff',
+    borderWidth: 1,
+    borderColor: '#e5e5e5',
+    maxHeight: 220,
+  },
+  logTitle: {
+    fontSize: 16,
+    fontWeight: '700',
+    color: '#000',
+    marginBottom: 8,
+  },
+  logItem: {
+    fontSize: 12,
+    color: '#333',
+    marginBottom: 4,
   },
   tabBar: {
     flexDirection: 'row',
