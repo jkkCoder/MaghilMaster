@@ -1,20 +1,18 @@
 import React, { useState } from 'react';
 import { AppState, NativeEventEmitter, SafeAreaView, View, Text, FlatList, StyleSheet, TouchableOpacity } from 'react-native';
 import MqttBroker from './src/nativeModules/MqttBrokerModule';
-import database from './src/watermelondb-example/database';
 import { Q } from '@nozbe/watermelondb';
-import { saveOrderIdToDB, getAllOrderIds, clearEmptyOrders } from './src/watermelondb-example/simplifiedWatermelonDBUtils';
-import Order from './src/watermelondb-example/models/order';
 import { Provider, useDispatch } from 'react-redux';
 import { getPrinters } from './src/api/printer/printerActions';
 import { Store } from './src/api/configureStore';
 import Routes from './src/Navigator';
 import OrderScreen from './src/screens/OrderScreen';
 import ProductScreen from './src/screens/ProductScreen';
-import { setupMasterSync } from './src/watermelondb-example/watermelon-sync';
-import { saveOrderToDB } from './src/utils/printerWatermelonDBUtils';
 import { startMasterSync } from './src/sync/MasterSyncManager';
-import { applyRemoteChanges, getChangesSince } from './src/watermelondb-example/watermelonSyncHelpers';
+import { insertOrderFromJSON } from './src/utils/orderUtils';
+import { database } from './src/Storage/database';
+import { applyRemoteChanges, getChangesSince } from './src/utils/watermelon-helper';
+import Order from './src/models/Order';
 
 export const mock = {
   "orderId": "9c20d582-5eed-4386-8adc-a49aead5f262",
@@ -194,10 +192,9 @@ const AppContent = () => {
         console.log('✅ Master device ready!');
         console.log('   MQTT Broker: tcp://127.0.0.1:1883');
         console.log('   HTTP Server:', serverInfo.url);
-        setupMasterSync(database);
-        // Still subscribe to test/topic for legacy MQTT orders
-        MqttBroker.subscribe('test/topic');
-        MqttBroker.subscribe('sync/request');
+        // MqttBroker.subscribe('sync/pull/+');
+        // MqttBroker.subscribe('sync/push/+');
+        MqttBroker.subscribe('offline_events');
       } catch (error) {
         console.error('❌ Master initialization failed:', error);
       }
@@ -219,10 +216,16 @@ const AppContent = () => {
     };
 
     const handleFullMessage = async (topic: string, msg: any) => {
+      console.log("topic, msg", topic, " ", msg);
+      const parsedJson = JSON.parse(msg);
+      const actualTopic = parsedJson.topic;
+      const actualMessage = parsedJson.message;
+      const fromDeviceId = parsedJson.fromDeviceId;
+
       cleanProcessedMessages();
-      if (topic === 'test/topic') {
+      if (actualTopic === 'order/data') {
         try {
-          const orderData = typeof msg === 'string' ? JSON.parse(msg) : msg;
+          const orderData = actualMessage
           const messageId = `${orderData.orderId}-${orderData.orderNo || 'no-number'}`;
 
           if (processedMessages.has(messageId)) {
@@ -232,34 +235,34 @@ const AppContent = () => {
 
           processedMessages.add(messageId);
           console.log('🔄 Processing order:', orderData.orderId);
-          await saveOrderIdToDB(orderData);
+          await insertOrderFromJSON(orderData);
           console.log('✅ Order saved:', orderData.orderId);
 
-          // Verify
-          const foundOrders = await database
-            .get('orders')
-            .query(Q.where('order_id', orderData.orderId))
-            .fetch();
-          if (foundOrders.length > 0) console.log('✅ Order confirmed in DB:', orderData.orderId);
-          else console.error('❌ Order not found after save');
+          // // Verify
+          // const foundOrders = await database
+          //   .get('mh_nxt_orders')
+          //   .query(Q.where('order_id', orderData.orderId))
+          //   .fetch();
+          // if (foundOrders.length > 0) console.log('✅ Order confirmed in DB:', orderData.orderId);
+          // else console.error('❌ Order not found after save');
 
           // Remove after 1 min
           setTimeout(() => processedMessages.delete(messageId), 60 * 1000);
         } catch (err) {
           console.error('❌ Error processing MQTT message:', err);
         }
-      } else if (topic === 'sync/request') {
+      } else if (actualTopic === 'sync/request') {
         try {
           console.log('🔁 Sync request received');
-          const orderIds = await getAllOrderIds();
-          const safeOrders = orderIds.map(id => ({ orderId: id }));
-          await sendSyncData(safeOrders);
+          // const orderIds = await getAllOrderIds();
+          // const safeOrders = orderIds.map(id => ({ orderId: id }));
+          // await sendSyncData(safeOrders);
         } catch (err) {
           console.error('❌ Error handling sync request:', err);
         }
-      } else if (topic.startsWith('sync/pull/')) {
+      } else if (actualTopic.startsWith('sync/pull/')) {
         const [, , clientId] = topic.split('/');
-        const { lastPulledAt, syncId } = JSON.parse(msg.toString());
+        const { lastPulledAt, syncId } = JSON.parse(actualMessage.toString());
 
         console.log(`🔽 PULL request from client ${clientId}`);
 
@@ -270,9 +273,9 @@ const AppContent = () => {
           `sync/pull/response/${clientId}/${syncId}`,
           JSON.stringify(result)
         );
-      } else if (topic.startsWith('sync/push/')) {
+      } else if (actualTopic.startsWith('sync/push/')) {
         const [, , clientId] = topic.split('/');
-        const { changes, lastPulledAt } = JSON.parse(msg.toString());
+        const { changes, lastPulledAt } = JSON.parse(actualMessage.toString());
 
         console.log(`🔼 PUSH from client ${clientId}`);
 
@@ -332,9 +335,9 @@ const AppContent = () => {
       console.warn('⚠️ MQTT connection lost, reconnecting...');
       try {
         await MqttBroker.startBroker();
-        setupMasterSync(database)
-        MqttBroker.subscribe('test/topic');
-        MqttBroker.subscribe('sync/request');
+        // MqttBroker.subscribe('sync/pull/+');
+        // MqttBroker.subscribe('sync/push/+');
+        MqttBroker.subscribe('offline_events');
         console.log('✅ MQTT reconnected');
       } catch (err) {
         console.error('❌ Failed to reconnect MQTT:', err);
@@ -362,28 +365,6 @@ const AppContent = () => {
 
   }, [])
 
-  // Fetch WatermelonDB orders
-  const getWatermelonOrders = async () => {
-    console.log('🔍 Fetching orders from WatermelonDB...');
-    try {
-      const orders = await database.get<Order>('orders').query().fetch();
-      setWatermelonOrders(orders);
-    } catch (err) {
-      console.error('❌ Error fetching orders:', err);
-    }
-  };
-
-  const clearEmptyOrdersFromDB = async () => {
-    console.log('🧹 Clearing empty orders...');
-    try {
-      const deletedCount = await clearEmptyOrders();
-      console.log(`✅ Cleared ${deletedCount} empty orders`);
-      await getWatermelonOrders();
-    } catch (err) {
-      console.error('❌ Error clearing orders:', err);
-    }
-  };
-
   const trigger = async () => {
     console.log("creating an order...");
 
@@ -402,7 +383,7 @@ const AppContent = () => {
     };
 
     const stringified = JSON.stringify(uniqueMock);
-    saveOrderToDB(JSON.parse(stringified));
+    // saveOrderToDB(JSON.parse(stringified));
   }
 
   const sendSyncData = async (safeOrders: { orderId: string }[]) => {
@@ -441,12 +422,12 @@ const AppContent = () => {
   return (
     <SafeAreaView style={{ flex: 1, backgroundColor: 'white', padding: 10 }}>
       <Text style={{ backgroundColor: 'black', color: 'white', padding: 5 }}>Server App</Text>
-      <Text onPress={getWatermelonOrders} style={{ marginTop: 20, fontSize: 16, color: 'black' }}>
+      <Text onPress={() => {}} style={{ marginTop: 20, fontSize: 16, color: 'black' }}>
         Fetch Orders from WatermelonDB
       </Text>
 
       <View style={{ flexDirection: 'row', gap: 20 }}>
-        <Text onPress={clearEmptyOrdersFromDB} style={{ marginTop: 10, fontSize: 16, color: 'red' }}>
+        <Text onPress={() => {}} style={{ marginTop: 10, fontSize: 16, color: 'red' }}>
           Clear Empty Orders
         </Text>
 

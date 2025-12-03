@@ -118,9 +118,7 @@ public class MqttForegroundService extends Service {
             // This service just keeps the app alive in the background
             if (mqttBroker != null) {
                 mqttBroker.startBroker();
-                mqttBroker.subscribe("test/topic");
-                mqttBroker.subscribe("sync/request");
-                mqttBroker.subscribe("sync/data");
+                mqttBroker.subscribe("offline_events");
             } else {
                 Log.w(TAG, "⚠️ MqttBroker not initialized. Start MQTT from React Native side.");
             }

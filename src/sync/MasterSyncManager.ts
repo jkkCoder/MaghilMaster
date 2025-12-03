@@ -1,7 +1,7 @@
 import KtorSyncServer, { syncServerEmitter } from '../nativeModules/KtorSyncServer';
 import MqttBroker from '../nativeModules/MqttBrokerModule';
-import database from '../watermelondb-example/database';
 import { Q } from '@nozbe/watermelondb';
+import { database } from '../Storage/database';
 
 const SYNC_PORT = 3001;
 let serverInfo: any = null;
