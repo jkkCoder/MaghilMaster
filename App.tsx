@@ -151,8 +151,6 @@ const AppContent = () => {
   const [activeTab, setActiveTab] = useState<'orders' | 'products'>('orders');
   const [deviceIp, setDeviceIp] = React.useState('resolving...');
   const [serverLogs, setServerLogs] = React.useState<string[]>([]);
-  const connectedClientsRef = React.useRef<Set<string>>(new Set());
-  const [connectedClientCount, setConnectedClientCount] = React.useState(0);
 
   const pushServerLog = React.useCallback((message: string) => {
     setServerLogs((prev) => {
@@ -161,17 +159,6 @@ const AppContent = () => {
       return next.slice(0, 100);
     });
   }, []);
-
-  const trackConnectedClient = React.useCallback(
-    (clientId: string | undefined) => {
-      if (!clientId) return;
-      if (connectedClientsRef.current.has(clientId)) return;
-      connectedClientsRef.current.add(clientId);
-      setConnectedClientCount(connectedClientsRef.current.size);
-      pushServerLog(`New client observed: ${clientId} (total ${connectedClientsRef.current.size})`);
-    },
-    [pushServerLog]
-  );
 
   // Track processed messages to prevent duplicates
   const processedMessages = React.useRef(new Set<string>()).current;
@@ -301,9 +288,7 @@ const AppContent = () => {
       const parsedJson = typeof msg === 'string' ? JSON.parse(msg) : msg;
       const actualTopic = parsedJson.topic;
       const actualMessage = parsedJson.message;
-      const fromDeviceId = parsedJson.fromDeviceId;
       pushServerLog(`MQTT message received on ${actualTopic || topic}`);
-      if (fromDeviceId) trackConnectedClient(fromDeviceId);
 
       cleanProcessedMessages();
       if (actualTopic === 'order/data') {
@@ -355,7 +340,6 @@ const AppContent = () => {
 
         console.log(`🔽 PULL request from client ${clientId}`);
         pushServerLog(`Pull request from client ${clientId || 'unknown'}`);
-        trackConnectedClient(clientId);
 
         const result = await getChangesSince(database, lastPulledAt);
 
@@ -371,7 +355,6 @@ const AppContent = () => {
 
         console.log(`🔼 PUSH from client ${clientId}`);
         pushServerLog(`Push received from client ${clientId || 'unknown'}`);
-        trackConnectedClient(clientId);
 
         await applyRemoteChanges(database, { changes, lastPulledAt });
         pushServerLog(`Applied remote changes from ${clientId || 'unknown'}`);
@@ -450,7 +433,7 @@ const AppContent = () => {
       connLostListener.remove();
       Object.values(chunkBuffer).forEach(({ timeoutId }) => clearTimeout(timeoutId));
     };
-  }, [pushServerLog, trackConnectedClient]);
+  }, [pushServerLog]);
 
   React.useEffect(() => {
     (async () => {
@@ -464,27 +447,6 @@ const AppContent = () => {
     })()
 
   }, [])
-
-  const trigger = async () => {
-    console.log("creating an order...");
-
-    const uniqueOrderId = `mock-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
-    const paddedOrderNo = Math.random().toString().padStart(3, '0');
-
-    // Create a copy of mock with unique IDs
-    const uniqueMock = {
-      ...mock,
-      orderId: uniqueOrderId,
-      orderNo: `ORD-${paddedOrderNo}`,
-      items: [],
-      totals: [],
-      transactions: [],
-      transactionsWithTip: []
-    };
-
-    const stringified = JSON.stringify(uniqueMock);
-    // saveOrderToDB(JSON.parse(stringified));
-  }
 
   const sendSyncData = async (safeOrders: { orderId: string }[]) => {
     try {
@@ -523,24 +485,13 @@ const AppContent = () => {
     <SafeAreaView style={{ flex: 1, backgroundColor: 'white', padding: 10 }}>
       <Text style={{ backgroundColor: 'black', color: 'white', padding: 5 }}>Server App</Text>
       <Text onPress={() => {}} style={{ marginTop: 20, fontSize: 16, color: 'black' }}>
-        Fetch Orders from WatermelonDB
+        Maghil Merchant Server app
       </Text>
       <View style={styles.statusCard}>
         <Text style={styles.statusHeading}>Runtime Status</Text>
         <Text style={styles.statusText}>Device IP: {deviceIp}</Text>
-        <Text style={styles.statusText}>Observed devices: {connectedClientCount}</Text>
         <Text style={styles.statusText}>
           Last event: {serverLogs[0] ?? 'Waiting for MQTT events…'}
-        </Text>
-      </View>
-
-      <View style={{ flexDirection: 'row', gap: 20 }}>
-        <Text onPress={() => {}} style={{ marginTop: 10, fontSize: 16, color: 'red' }}>
-          Clear Empty Orders
-        </Text>
-
-        <Text onPress={trigger} style={{ marginTop: 10, fontSize: 16, color: 'red' }}>
-          Generate one Order
         </Text>
       </View>
 
